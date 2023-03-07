@@ -82,20 +82,66 @@ class SimpleProductSerializer(serializers.ModelSerializer):
 #     class Meta:
 #         model = CartItem
 #         fields = '__all__'
+# *
+# class CartItemSerializer(serializers.ModelSerializer):
+#     product_details = serializers.SerializerMethodField()
+#     # cart = serializers.PrimaryKeyRelatedField(queryset=Cart.objects.all(), required=False)
+#     cart = serializers.SerializerMethodField()
+
+#     class Meta:
+#         model = CartItem
+#         fields = ['id', 'cart', 'product', 'quantity', 'product_details']
+
+#     def get_product_details(self, obj):
+#         product = obj.product
+#         serializer = ProductSerializer(product)
+#         return serializer.data
+
+#     def get_cart(self, obj):
+#         cart = obj.cart
+#         serializer = CartSerializer(cart)
+#         return serializer.data
+# *
 
 class CartItemSerializer(serializers.ModelSerializer):
     product_details = serializers.SerializerMethodField()
-    # cart = serializers.PrimaryKeyRelatedField(queryset=Cart.objects.all(), required=False)
-    \
+    cart = serializers.CharField(source ='cart.id',read_only=True)
 
     class Meta:
         model = CartItem
         fields = ['id', 'cart', 'product', 'quantity', 'product_details']
+        # extra_kwargs = {
+        #     'cart': {'required': False},
+        # }
 
     def get_product_details(self, obj):
         product = obj.product
         serializer = ProductSerializer(product)
         return serializer.data
+
+
+    # def create(self, validated_data):
+    #     request = self.context['request']
+    #     product_id = self.context['request'].query_params.get('product')
+    #     try:
+    #         product = Product.objects.get(pk=product_id)
+    #     except Product.DoesNotExist:
+    #         raise serializers.ValidationError({'product': 'Invalid product ID.'})
+
+    #     quantity = validated_data.get('quantity', 1)
+    #     cart = Cart.objects.filter(account=request.user).first()
+    #     if not cart:
+    #         cart = Cart.objects.create(account=request.user)
+
+    #     cart_item, created = CartItem.objects.get_or_create(cart=cart, product=product)
+    #     if not created:
+    #         cart_item.quantity += quantity
+    #         cart_item.save(update_fields=['quantity'])
+    #     else:
+    #         cart_item.quantity = quantity
+    #         cart_item.save()
+
+    #     return cart_item
 
 # class CartItemSerializer(serializers.ModelSerializer):
 #     product_details = serializers.SerializerMethodField()
