@@ -78,10 +78,38 @@ class SimpleProductSerializer(serializers.ModelSerializer):
     
 
 
+# class CartItemSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = CartItem
+#         fields = '__all__'
+
 class CartItemSerializer(serializers.ModelSerializer):
+    product_details = serializers.SerializerMethodField()
+    # cart = serializers.PrimaryKeyRelatedField(queryset=Cart.objects.all(), required=False)
+    \
+
     class Meta:
         model = CartItem
-        fields = '__all__'
+        fields = ['id', 'cart', 'product', 'quantity', 'product_details']
+
+    def get_product_details(self, obj):
+        product = obj.product
+        serializer = ProductSerializer(product)
+        return serializer.data
+
+# class CartItemSerializer(serializers.ModelSerializer):
+#     product_details = serializers.SerializerMethodField()
+#     cart = serializers.PrimaryKeyRelatedField(queryset=Cart.objects.all(), required=False)
+
+#     class Meta:
+#         model = CartItem
+#         fields = ['id', 'cart', 'product', 'quantity', 'product_details']
+
+#     def get_product_details(self, obj):
+#         product = obj.product
+#         serializer = ProductSerializer(product)
+#         return serializer.data
+
 
 class CartSerializer(serializers.ModelSerializer):
     items = CartItemSerializer(many=True, read_only=True)

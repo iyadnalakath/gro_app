@@ -220,12 +220,12 @@ class CartView(generics.RetrieveAPIView):
         cart, created = Cart.objects.get_or_create(account=self.request.user)
         return cart
     
-class CartItemView(generics.ListCreateAPIView):
-    serializer_class = CartItemSerializer
-    permission_classes = [permissions.IsAuthenticated]
+# class CartItemView(generics.ListCreateAPIView):
+#     serializer_class = CartItemSerializer
+#     permission_classes = [permissions.IsAuthenticated]
 
-    def get_queryset(self):
-        return CartItem.objects.filter(cart__account=self.request.user)
+#     def get_queryset(self):
+#         return CartItem.objects.filter(cart__account=self.request.user)
     
 class CartItemView(generics.ListCreateAPIView):
     serializer_class = CartItemSerializer
@@ -260,46 +260,78 @@ class CartItemView(generics.ListCreateAPIView):
     #         return Response(serializer.data, status=status.HTTP_201_CREATED)
     #     else:
     #         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    def create(self, request, *args, **kwargs):
-        # data = request.data.copy()
-        # product_id = self.request.query_params.get('product')
-        data = request.data.copy()
-        data["product"] = self.request.query_params.get('product')
-        data["cart"] = self.request.query_params.get('cart')
+    # def create(self, request, *args, **kwargs):
+    #     # data = request.data.copy()
+    #     # product_id = self.request.query_params.get('product')
+    #     data = request.data.copy()
+    #     data["product"] = self.request.query_params.get('product')
+    #     data["cart"] = self.request.query_params.get('cart')
         
 
-        # if not product:
-        #     return Response({'product': 'This field is requireded.'}, status=status.HTTP_400_BAD_REQUEST)
+    #     # if not product:
+    #     #     return Response({'product': 'This field is requireded.'}, status=status.HTTP_400_BAD_REQUEST)
+    #     serializer = CartItemSerializer(data=data)
+    #     if serializer.is_valid():
+    #         cart = Cart.objects.get_or_create(account=self.request.user)[0]
+    #         quantity = serializer.validated_data.get('quantity', 1)
+    #         product_id = data.get("product")
+    #         cart_id = data.get("cart")
+
+
+    #         # Retrieve the product instance using the product_id
+    #         # try:
+    #         #     product = Product.objects.get(id=product)
+    #         # except Product.DoesNotExist:
+    #         #     return Response({'product': 'Invalid product id.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    #         # Check if the product already exists in the cart
+    #         existing_item = CartItem.objects.filter(cart=cart_id, product=product_id).first()
+
+    #         if existing_item:
+    #             # If the product exists in the cart, increase its quantity
+    #             existing_item.quantity = F('quantity') + quantity
+    #             existing_item.save(update_fields=['quantity'])
+    #         else:
+    #             # Otherwise, add the new product to the cart
+    #             # serializer.save(cart=cart_id, product=product_id, quantity=quantity)
+    #             serializer.save()
+
+    #         # Return a success response
+    #         return Response(serializer.data, status=status.HTTP_201_CREATED)
+    #     else:
+    #         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    def create(self, request, *args, **kwargs):
+        data = request.data.copy()
+        product_id = self.request.query_params.get('product')
+
+        try:
+            product = Product.objects.get(pk=product_id)
+        except Product.DoesNotExist:
+            return Response({"product": "Invalid product ID."}, status=status.HTTP_400_BAD_REQUEST)
+
+        data["product"] = product_id
         serializer = CartItemSerializer(data=data)
+
         if serializer.is_valid():
-            cart = Cart.objects.get_or_create(account=self.request.user)[0]
             quantity = serializer.validated_data.get('quantity', 1)
-            product_id = data.get("product")
-            cart_id = data.get("cart")
+            cart = Cart.objects.filter(account=self.request.user).first()
 
+            if not cart:
+                cart = Cart.objects.create(account=self.request.user)
 
-            # Retrieve the product instance using the product_id
-            # try:
-            #     product = Product.objects.get(id=product)
-            # except Product.DoesNotExist:
-            #     return Response({'product': 'Invalid product id.'}, status=status.HTTP_400_BAD_REQUEST)
-
-            # Check if the product already exists in the cart
-            existing_item = CartItem.objects.filter(cart=cart_id, product=product_id).first()
+            serializer.validated_data['cart'] = cart
+            existing_item = CartItem.objects.filter(cart=cart, product=product).first()
 
             if existing_item:
-                # If the product exists in the cart, increase its quantity
-                existing_item.quantity = F('quantity') + quantity
+                existing_item.quantity += quantity
                 existing_item.save(update_fields=['quantity'])
+                serializer = CartItemSerializer(existing_item)
             else:
-                # Otherwise, add the new product to the cart
-                serializer.save(cart=cart, product=product_id, quantity=quantity)
+                serializer.save(cart=cart, product=product, quantity=quantity)
 
-            # Return a success response
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 class OrderViewSet(ModelViewSet):
     http_method_names=['get','post','patch','delete','head','options']
