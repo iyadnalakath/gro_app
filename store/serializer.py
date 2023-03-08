@@ -6,18 +6,51 @@ from .signals import order_created
 from main.functions import get_auto_id, password_generater
 import pdb
 
+# class ProductSerializer(serializers.ModelSerializer):
+#     category_name = serializers.CharField(source ='category.name',read_only=True)
+#     # image = serializers.SerializerMethodField()
+#     class Meta:
+#         model= Product
+#         fields = ['id','name','image','category','price','offer_price','offer_in_percentage','unit','category_name','last_update']
+    
+
+#     offer_price = serializers.SerializerMethodField(method_name='calculate_final_price')
+    
+#     def calculate_final_price(self,product:Product):
+#         final= product.price * int(product.offer_in_percentage)/ Decimal(100)
+#         return product.price - final
+
+#     # def get_image(self, obj):
+#     #     if obj.image:
+#     #         # if the image file is stored locally, return the full URL using the staticfiles_storage
+#     #         if hasattr(settings, 'LOCAL_MEDIA_URL'):
+#     #             return f"{settings.LOCAL_MEDIA_URL}{obj.image}"
+#     #         # if the image file is stored remotely, return the full URL using the MEDIA_URL setting
+#     #         else:
+#     #             return f"{settings.MEDIA_URL}{obj.image}"
+#     #     return None
+
 class ProductSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source ='category.name',read_only=True)
+    # image_url = serializers.SerializerMethodField()
+
     class Meta:
         model= Product
         fields = ['id','name','image','category','price','offer_price','offer_in_percentage','unit','category_name','last_update']
-    
 
     offer_price = serializers.SerializerMethodField(method_name='calculate_final_price')
     
     def calculate_final_price(self,product:Product):
         final= product.price * int(product.offer_in_percentage)/ Decimal(100)
         return product.price - final
+
+    # def get_image_url(self, product):
+    #     request = self.context.get('request')
+    #     if product.image:
+    #         return request.build_absolute_uri(product.image.url)
+    #     return None
+
+
  
 
 class ReviewSerializer(serializers.ModelSerializer):
@@ -102,47 +135,6 @@ class SimpleProductSerializer(serializers.ModelSerializer):
 #         serializer = CartSerializer(cart)
 #         return serializer.data
 # *
-
-class CartItemSerializer(serializers.ModelSerializer):
-    product_details = serializers.SerializerMethodField()
-    cart = serializers.CharField(source ='cart.id',read_only=True)
-
-    class Meta:
-        model = CartItem
-        fields = ['id', 'cart', 'product', 'quantity', 'product_details']
-        # extra_kwargs = {
-        #     'cart': {'required': False},
-        # }
-
-    def get_product_details(self, obj):
-        product = obj.product
-        serializer = ProductSerializer(product)
-        return serializer.data
-
-
-    # def create(self, validated_data):
-    #     request = self.context['request']
-    #     product_id = self.context['request'].query_params.get('product')
-    #     try:
-    #         product = Product.objects.get(pk=product_id)
-    #     except Product.DoesNotExist:
-    #         raise serializers.ValidationError({'product': 'Invalid product ID.'})
-
-    #     quantity = validated_data.get('quantity', 1)
-    #     cart = Cart.objects.filter(account=request.user).first()
-    #     if not cart:
-    #         cart = Cart.objects.create(account=request.user)
-
-    #     cart_item, created = CartItem.objects.get_or_create(cart=cart, product=product)
-    #     if not created:
-    #         cart_item.quantity += quantity
-    #         cart_item.save(update_fields=['quantity'])
-    #     else:
-    #         cart_item.quantity = quantity
-    #         cart_item.save()
-
-    #     return cart_item
-
 # class CartItemSerializer(serializers.ModelSerializer):
 #     product_details = serializers.SerializerMethodField()
 #     cart = serializers.PrimaryKeyRelatedField(queryset=Cart.objects.all(), required=False)
@@ -156,13 +148,38 @@ class CartItemSerializer(serializers.ModelSerializer):
 #         serializer = ProductSerializer(product)
 #         return serializer.data
 
+class CartItemSerializer(serializers.ModelSerializer):
+    # product_details = serializers.SerializerMethodField()
+    product_details = ProductSerializer(source='product', read_only=True, context={'request': serializers.SerializerMethodField()})
 
+    cart = serializers.CharField(source ='cart.id',read_only=True)
+    total_price = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CartItem
+        fields = ['id', 'cart', 'product', 'quantity', 'product_details','total_price']
+        # extra_kwargs = {
+        #     'cart': {'required': False},
+        # }
+
+    def get_total_price(self,cart_item:CartItem):
+        return cart_item.quantity * cart_item.product.offer_price
+    
+    def get_product_details(self, obj):
+        product = obj.product
+        serializer = ProductSerializer(product)
+        return serializer.data
+    
 class CartSerializer(serializers.ModelSerializer):
     items = CartItemSerializer(many=True, read_only=True)
+    total_price_of_products_in_cart = serializers.SerializerMethodField()
 
     class Meta:
         model = Cart
-        fields = ['id', 'created_at', 'items']
+        fields = ['id', 'created_at', 'items','total_price_of_products_in_cart']
+
+    def get_total_price_of_products_in_cart(self,cart):
+        return sum([item.quantity * item.product.offer_price for item in cart.items.all()])
 
 # class CartItemSerializer(serializers.ModelSerializer):
 #     product =  SimpleProductSerializer()
