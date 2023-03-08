@@ -189,13 +189,13 @@ REST_FRAMEWORK = {
 AUTH_USER_MODEL = 'projectaccount.Account'
 
 
-DJOSER ={
-    'SERIALIZERS':{
-        'user_create':'core.serializers.UserCreateSerializer',
-        'current_user':'core.serializers.UserSerializer',
-    }
-}
-
+# DJOSER ={
+#     'SERIALIZERS':{
+#         'user_create':'core.serializers.UserCreateSerializer',
+#         'current_user':'core.serializers.UserSerializer',
+#     }
+# }
+DJOSER = {"USER_ID_FIELD": "username"}
 
 # SIMPLE_JWT = {
 #     'AUTH_HEADER_TYPES': ('JWT',),
