@@ -29,6 +29,14 @@ class BannerAdmin(admin.ModelAdmin):
 class CategoryAdmin(admin.ModelAdmin):
     list_display = ['id','name','image']
 
+@admin.register(models.Order)
+class OrderAdmin(admin.ModelAdmin):
+    list_display = ['id','placed_at','account','payment_status']
+
+@admin.register(models.OrderItem)
+class OrderItem(admin.ModelAdmin):
+    list_display = ['id','cart','quantity','price','order']
+
 
 
 @admin.register(models.Product)
@@ -73,12 +81,12 @@ class ProductAdmin(admin.ModelAdmin):
 #         )
 
 
-class OrderItemInline(admin.TabularInline):
-    autocomplete_fields = ['product']
-    min_num = 1
-    max_num = 10
-    model = models.OrderItem
-    extra = 0
+# class OrderItemInline(admin.TabularInline):
+#     autocomplete_fields = ['product']
+#     min_num = 1
+#     max_num = 10
+#     model = models.OrderItem
+#     extra = 0
 
 
 # @admin.register(models.Order)

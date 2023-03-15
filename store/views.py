@@ -19,6 +19,7 @@ from django.core.exceptions import PermissionDenied
 from rest_framework import viewsets
 from django.db.models import F
 from rest_framework.request import Request
+from django.http import Http404
 # Create your views here.
 
 
@@ -226,48 +227,41 @@ class CartView(generics.ListAPIView):
 
 
 
-    # def list(self, request, *args, **kwargs):
-    #     # queryset = self.filter_queryset(queryset)
-    #     queryset = self.get_queryset()
-    #     queryset = self.filter_queryset(queryset)
-
-    #     if self.request.user.role == "customer":
-    #         queryset = queryset.filter(account=self.request.user)
-    #         serializer = CartSerializer(queryset, many=True)
-    #         return Response(serializer.data)
-    #     elif self.request.user.role in ["admin"]:
-    #         return super().list(request, *args, **kwargs)
-
-    #     else:
-    #         raise PermissionDenied("You are not allowed to retrieve this object.")
-
-    # def get_object(self, request=None):
-    #     try:
-    #         cart = Cart.objects.get(account=request.user)
-    #     except Cart.DoesNotExist:
-    #         cart = Cart.objects.create(account=request.user)
-    #     return cart
-    # def get_object(self, request=None):
-    #     try:
-    #         cart = Cart.objects.get(account=self.request.user)
-    #     except Cart.DoesNotExist:
-    #         cart = Cart.objects.create(account=self.request.user)
-    #     return cart
-# class CartItemView(generics.ListCreateAPIView):
-#     serializer_class = CartItemSerializer
-#     permission_classes = [permissions.IsAuthenticated]
-
-#     def get_queryset(self):
-#         return CartItem.objects.filter(cart__account=self.request.user)
     
-class CartItemView(generics.ListCreateAPIView):
+class CartItemView(generics.ListCreateAPIView, generics.RetrieveAPIView, generics.DestroyAPIView, generics.UpdateAPIView):
+    queryset = CartItem.objects.all()
     serializer_class = CartItemSerializer
     permission_classes = [permissions.IsAuthenticated]
+    lookup_field = 'pk'
+
 
 
     # def get_cart(self):
     #     cart_view = CartView()
     #     return cart_view.get_object(request=self.request)
+    def get_queryset(self):
+        return CartItem.objects.filter(cart__account=self.request.user)
+ 
+    def get(self, request, *args, **kwargs):
+        try:
+            item = self.get_object()
+        except Http404:
+            return Response({'error': 'Item not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = self.get_serializer(item)
+        return Response(serializer.data)
+
+    def delete(self, request, *args, **kwargs):
+        try:
+            item = self.get_object()
+        except Http404:
+            return Response({'error': 'Item not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        if item.cart.account != request.user:
+            return Response({'error': 'Unauthorized'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        self.perform_destroy(item)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     def create(self, request, *args, **kwargs):
         data = request.data.copy()
@@ -310,6 +304,232 @@ class CartItemView(generics.ListCreateAPIView):
     def post(self, request, *args, **kwargs):
         self.request = request
         return super().post(request, *args, **kwargs)
+    
+    def update(self, request, *args, **kwargs):
+        try:
+            item = self.get_object()
+        except Http404:
+            return Response({'error': 'Item not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if item.cart.account != request.user:
+            return Response({'error': 'Unauthorized'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        serializer = self.get_serializer(item, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    
+# class OrderViewSet(ModelViewSet):
+#     http_method_names=['get','post','patch','delete','head','options']
+
+#     # def get_permissions(self):
+#     #     if self.request.method in ['PUT','PATCH','DELETE']:
+#     #         return [IsAdminUser()]
+#     #     return [IsAuthenticated()]
+#     queryset = Order.objects.all()
+#     # serializer_class = CartItemSerializer
+#     permission_classes = [permissions.IsAuthenticated]
+
+
+#     def get_serializer_class(self):
+#         if self.request.method=='POST':
+#             return CreateOrderSerializer
+#         elif self.request.method=='PATCH':
+#             return UpdateOrderSerializer
+#         # elif self.request.method=='GET':
+#         #     return OrderItemSerializer
+#         return OrderSerializer
+
+#     def create(self, request, *args, **kwargs):
+#         data = request.data.copy()
+#         data["account"] = self.request.user.id
+#         # cart = data.get("cart") # Get the Cart instance with ID 1
+#         data["cart"] = self.request.query_params.get("cart")
+#         serializer = CreateOrderSerializer(data=data, context={'request': request})
+
+#         if serializer.is_valid():
+#             if self.request.user.role in ["admin", "customer"]:
+#                 serializer.save()
+#                 return Response(serializer.data, status=status.HTTP_201_CREATED)
+#             else:
+#                 raise PermissionDenied("You are not allowed to create this object.")
+#         else:
+#             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+
+    
+#     def get_queryset(self):
+#         user = self.request.user
+#         if user.is_staff:
+#             return Order.objects.all()
+#         try:
+#             account_id = Account.objects.only('id').get(id=user.id)
+#         except Account.DoesNotExist:
+#             account_id = None
+#         return Order.objects.filter(account_id=account_id)
+
+
+class OrderView(generics.ListAPIView):
+    serializer_class = OrderSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = Order.objects.all()
+        # queryset = Order.objects.select_related('account', 'orderitems__product')
+        if self.request.user.role == "customer":
+            queryset = queryset.filter(account=self.request.user)
+        return queryset
+
+
+    
+class OrderItemView(generics.ListCreateAPIView, generics.RetrieveAPIView, generics.DestroyAPIView, generics.UpdateAPIView):
+    queryset = OrderItem.objects.all()
+    serializer_class = OrderItemSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    lookup_field = 'pk'
+
+
+
+    # def get_cart(self):
+    #     cart_view = CartView()
+    #     return cart_view.get_object(request=self.request)
+    def get_queryset(self):
+        return OrderItem.objects.filter(order__account=self.request.user)
+ 
+    def get(self, request, *args, **kwargs):
+        try:
+            items_order = self.get_object()
+        except Http404:
+            return Response({'error': 'Item not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = self.get_serializer(items_order)
+        return Response(serializer.data)
+
+    def delete(self, request, *args, **kwargs):
+        try:
+            items_order = self.get_object()
+        except Http404:
+            return Response({'error': 'Item not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        if items_order.order.account != request.user:
+            return Response({'error': 'Unauthorized'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        self.perform_destroy(items_order)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+    # def create(self, request, *args, **kwargs):
+    #     cart_id = request.query_params.get('cart')
+    #     cart = get_object_or_404(Cart, pk=cart_id)
+    #     if cart.user != request.user:
+    #         raise PermissionDenied("You are not allowed to create an order item from this cart.")
+    #     order = Order.objects.create(account=request.user)
+    #     order_items = []
+    #     for cart_item in cart.cart_items.all():
+    #         order_item = OrderItem.objects.create(
+    #             order=order,
+    #             product=cart_item.product,
+    #             quantity=cart_item.quantity,
+    #             price=cart_item.product.price,
+    #         )
+    #         order_items.append(order_item)
+    #     serializer = OrderItemSerializer(order_items, many=True)
+    #     return Response(serializer.data, status=status.HTTP_201_CREATED)
+    # def create(self, request, *args, **kwargs):
+    def create(self, request, *args, **kwargs):
+        cart_id = self.request.query_params.get('cart')
+        try:
+            cart = Cart.objects.get(pk=cart_id)
+        except Cart.DoesNotExist:
+            return Response({"cart": "Invalid cart ID."}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # rest of the code to create Order and OrderItem instances
+
+        order_data = {
+            'account': request.user,
+            'payment_status': 'pending',
+            # 'total': cart.total_price_of_products_in_cart,
+  
+        }
+        order = Order(**order_data)
+        order.save() # save the order to the database
+
+        # Iterate through the items in the cart and create a new OrderItem instance for each item
+        order_items = []
+        for cart_item in cart.items.all():
+            order_item_data = {
+                'order': order,
+                'product': cart_item.product.id,
+                'quantity': cart_item.quantity,
+                'price': cart_item.product.offer_price,
+                'cart_id': cart_id,
+            }
+            order_item = OrderItem(**order_item_data)
+            order_item.save() # save the order item to the database
+            order_items.append(order_item)
+            
+
+        order.orderitems.add(*order_items) # add the saved order items to the order instance
+
+        # Clear the cart
+        # cart.clear()
+        cart.items.all().delete()
+        
+
+        # Return the serialized Order instance
+        serializer = self.get_serializer(order)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+    # def get(self, request, *args, **kwargs):
+    #     self.request = request
+    #     return super().get(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        self.request = request
+        return super().post(request, *args, **kwargs)
+    
+    # def update(self, request, *args, **kwargs):
+    #     try:
+    #         item = self.get_object()
+    #     except Http404:
+    #         return Response({'error': 'Item not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    #     if item.cart.account != request.user:
+    #         return Response({'error': 'Unauthorized'}, status=status.HTTP_401_UNAUTHORIZED)
+
+    #     serializer = self.get_serializer(item, data=request.data, partial=True)
+    #     if serializer.is_valid():
+    #         serializer.save()
+    #         return Response(serializer.data)
+    #     else:
+    #         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     # def get_queryset(self):
     #     return CartItem.objects.filter(cart__account=self.request.user)
@@ -420,39 +640,95 @@ class CartItemView(generics.ListCreateAPIView):
 
 
 
-class OrderViewSet(ModelViewSet):
-    http_method_names=['get','post','patch','delete','head','options']
+# class OrderViewSet(ModelViewSet):
+#     http_method_names=['get','post','patch','delete','head','options']
 
-    def get_permissions(self):
-        if self.request.method in ['PUT','PATCH','DELETE']:
-            return [IsAdminUser()]
-        return [IsAuthenticated()]
-
-
-
-    def create(self, request, *args, **kwargs):
-        serializer =CreateOrderSerializer(data=request.data,context={'user_id':self.request.user.id})
-        serializer.is_valid(raise_exception=True)
-        order = serializer.save()
-        serializer=OrderSerializer(order)
-        return Response(serializer.data)
+#     def get_permissions(self):
+#         if self.request.method in ['PUT','PATCH','DELETE']:
+#             return [IsAdminUser()]
+#         return [IsAuthenticated()]
 
 
 
-    def get_serializer_class(self):
-        if self.request.method=='POST':
-            return CreateOrderSerializer
-        elif self.request.method=='PATCH':
-            return UpdateOrderSerializer
-        return OrderSerializer
+    # def create(self, request, *args, **kwargs):
+    #     serializer =CreateOrderSerializer(data=request.data,context={'user_id':self.request.user.id})
+    #     serializer.is_valid(raise_exception=True)
+    #     order = serializer.save()
+    #     serializer=OrderSerializer(order)
+    #     return Response(serializer.data)
+
+    # def create(self, request, *args, **kwargs):
+    #     serializer_context = {
+    #         'user_id': request.user.id,
+    #         'request': request  # add the request object to the context
+    #     }
+    #     serializer = CreateOrderSerializer(data=request.data, context=serializer_context)
+    #     serializer.is_valid(raise_exception=True)
+    #     order = serializer.save()
+    #     serializer = OrderSerializer(order)
+    #     return Response(serializer.data)
+
+    # def get_serializer_class(self):
+    #     if self.request.method=='POST':
+    #         return CreateOrderSerializer
+    #     elif self.request.method=='PATCH':
+    #         return UpdateOrderSerializer
+    #     return OrderSerializer
     
+    # # def post(self, request, *args, **kwargs):
+    # #         serializer_context = {'request': request}
+    # #         serializer = self.get_serializer(data=request.data, context=serializer_context)
+    # #         serializer.is_valid(raise_exception=True)
+    # #         self.perform_create(serializer)
+    # #         return Response(serializer.data, status=status.HTTP_201_CREATED) 
 
-    def get_queryset(self):
-        user = self.request.user
-        if user.is_staff:
-            return Order.objects.all()
-        try:
-            customer_id = Account.objects.only('id').get(id = user.id)
-        except Account.DoesNotExist:
-            customer_id =None
-        return Order.objects.filter(customer_id=customer_id)
+    # def get_queryset(self):
+    #     user = self.request.user
+    #     if user.is_staff:
+    #         return Order.objects.all()
+    #     try:
+    #         customer_id = Account.objects.only('id').get(id = user.id)
+    #     except Account.DoesNotExist:
+    #         customer_id =None
+    #     return Order.objects.filter(customer_id=customer_id)
+
+
+
+
+
+
+
+    
+    # def list(self, request, *args, **kwargs):
+    #     # queryset = self.filter_queryset(queryset)
+    #     queryset = self.get_queryset()
+    #     queryset = self.filter_queryset(queryset)
+
+    #     if self.request.user.role == "customer":
+    #         queryset = queryset.filter(account=self.request.user)
+    #         serializer = CartSerializer(queryset, many=True)
+    #         return Response(serializer.data)
+    #     elif self.request.user.role in ["admin"]:
+    #         return super().list(request, *args, **kwargs)
+
+    #     else:
+    #         raise PermissionDenied("You are not allowed to retrieve this object.")
+
+    # def get_object(self, request=None):
+    #     try:
+    #         cart = Cart.objects.get(account=request.user)
+    #     except Cart.DoesNotExist:
+    #         cart = Cart.objects.create(account=request.user)
+    #     return cart
+    # def get_object(self, request=None):
+    #     try:
+    #         cart = Cart.objects.get(account=self.request.user)
+    #     except Cart.DoesNotExist:
+    #         cart = Cart.objects.create(account=self.request.user)
+    #     return cart
+# class CartItemView(generics.ListCreateAPIView):
+#     serializer_class = CartItemSerializer
+#     permission_classes = [permissions.IsAuthenticated]
+
+#     def get_queryset(self):
+#         return CartItem.objects.filter(cart__account=self.request.user)

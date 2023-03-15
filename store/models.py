@@ -88,28 +88,6 @@ class Product(models.Model):
 
 
 
-class Order(models.Model):
-    PAYMENT_STATUS_PENDING = 'P'
-    PAYMENT_STATUS_COMPLETE = 'C'
-    PAYMENT_STATUS_FAILED = 'F'
-
-    PAYMENT_STATUS_CHOICES = [
-        (PAYMENT_STATUS_PENDING , 'Pending'),(PAYMENT_STATUS_COMPLETE, 'Compete'),(PAYMENT_STATUS_FAILED,'Failed')
-    ]
-
-    placed_at = models.DateTimeField(auto_now_add=True)
-    customer = models.ForeignKey(Account,on_delete=models.PROTECT)
-    payment_status = models.CharField(
-        max_length=1, choices=PAYMENT_STATUS_CHOICES, default=PAYMENT_STATUS_PENDING)
-
-
-class OrderItem(models.Model):
-    order = models.ForeignKey(Order ,on_delete=models.PROTECT,related_name='items')
-    product = models.ForeignKey(Product ,on_delete=models.PROTECT)
-    quantity = models.PositiveSmallIntegerField()
-    # offer_price = models.DecimalField(max_digits=6,decimal_places=2)
-
-
 
 class Address(models.Model):
     street = models.CharField(max_length=255)
@@ -134,6 +112,41 @@ class CartItem(models.Model):
     class Meta:
         unique_together = ('cart', 'product')
     
+
+
+class Order(models.Model):
+    PAYMENT_STATUS_PENDING = 'P'
+    PAYMENT_STATUS_COMPLETE = 'C'
+    PAYMENT_STATUS_FAILED = 'F'
+
+    PAYMENT_STATUS_CHOICES = [
+        (PAYMENT_STATUS_PENDING , 'Pending'),(PAYMENT_STATUS_COMPLETE, 'Complete'),(PAYMENT_STATUS_FAILED,'Failed')
+    ]
+
+    placed_at = models.DateTimeField(auto_now_add=True)
+    account = models.ForeignKey(Account,on_delete=models.PROTECT)
+    payment_status = models.CharField(
+        max_length=1, choices=PAYMENT_STATUS_CHOICES, default=PAYMENT_STATUS_PENDING)
+    
+    def __str__(self):
+        return f'Order {self.id} - {self.account}'
+
+    def total_price_of_order(self):
+        total_price = 0
+        for order_item in self.items_order.all():
+            total_price += order_item.price * order_item.quantity
+        return total_price
+
+
+class OrderItem(models.Model):
+    order = models.ForeignKey(Order ,on_delete=models.PROTECT,related_name='items_order')
+    # product = models.ForeignKey(Product ,on_delete=models.PROTECT)
+    # quantity = models.PositiveSmallIntegerField()
+    cart = models.ForeignKey(Cart, on_delete=models.CASCADE,related_name='items_order')
+    # offer_price = models.DecimalField(max_digits=6,decimal_places=2)
+    product=models.CharField(max_length=255,null=True,blank=True)
+    quantity = models.PositiveSmallIntegerField(validators=[MinValueValidator(1)]) 
+    price=models.DecimalField(max_digits=6,decimal_places=2,default=Decimal(0))
 
 class Review(models.Model):
     product=models.ForeignKey(Product,on_delete=models.CASCADE,related_name='reviews')
