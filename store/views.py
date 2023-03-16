@@ -273,7 +273,7 @@ class CartItemView(generics.ListCreateAPIView, generics.RetrieveAPIView, generic
             return Response({"product": "Invalid product ID."}, status=status.HTTP_400_BAD_REQUEST)
 
         data["product"] = product_id
-        serializer = CartItemSerializer(data=data)
+        serializer = CartItemSerializer(data=data,context={'request': request})
 
         if serializer.is_valid():
             quantity = serializer.validated_data.get('quantity', 1)
@@ -384,6 +384,7 @@ class OrderView(generics.ListAPIView):
         return queryset
 
 
+
     
 class OrderItemView(generics.ListCreateAPIView, generics.RetrieveAPIView, generics.DestroyAPIView, generics.UpdateAPIView):
     queryset = OrderItem.objects.all()
@@ -391,6 +392,14 @@ class OrderItemView(generics.ListCreateAPIView, generics.RetrieveAPIView, generi
     permission_classes = [permissions.IsAuthenticated]
     lookup_field = 'pk'
 
+
+
+    # def get_serializer_class(self):
+    #     if self.request.method=='POST':
+    #         return CreateOrderSerializer
+    #     elif self.request.method=='PATCH':
+    #         return UpdateOrderSerializer
+    #     return OrderSerializer
 
 
     # def get_cart(self):
@@ -472,7 +481,7 @@ class OrderItemView(generics.ListCreateAPIView, generics.RetrieveAPIView, generi
             order_items.append(order_item)
             
 
-        order.orderitems.add(*order_items) # add the saved order items to the order instance
+        order.items_order.add(*order_items) # add the saved order items to the order instance
 
         # Clear the cart
         # cart.clear()

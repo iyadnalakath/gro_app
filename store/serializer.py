@@ -11,6 +11,7 @@ import pdb
 class ProductSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source ='category.name',read_only=True)
     # image_url = serializers.SerializerMethodField()
+    image = serializers.SerializerMethodField()
 
     class Meta:
         model= Product
@@ -21,6 +22,18 @@ class ProductSerializer(serializers.ModelSerializer):
     def calculate_final_price(self,product:Product):
         final= product.price * int(product.offer_in_percentage)/ Decimal(100)
         return product.price - final
+    
+    # def get_image(self, obj):
+    #     request = self.context.get('request')
+    #     image_url = obj.image.url
+    #     return request.build_absolute_uri(image_url)
+
+    def get_image(self, obj):
+        request = self.context.get('request')
+        image_url = obj.image.url
+        if request is not None:
+            return request.build_absolute_uri(image_url)
+        return image_url
 
     # def get_image_url(self, product):
     #     request = self.context.get('request')
@@ -83,7 +96,7 @@ class BannerSerializer(serializers.ModelSerializer):
 class CartItemSerializer(serializers.ModelSerializer):
     # product_details = serializers.SerializerMethodField()
     product_details = ProductSerializer(source='product', read_only=True, context={'request': serializers.SerializerMethodField()})
-
+    # product_details = serializers.SerializerMethodField()
     cart = serializers.CharField(source ='cart.id',read_only=True)
     total_price = serializers.SerializerMethodField()
 
@@ -97,9 +110,15 @@ class CartItemSerializer(serializers.ModelSerializer):
     def get_total_price(self,cart_item:CartItem):
         return cart_item.quantity * cart_item.product.offer_price
     
+    # def get_product_details(self, obj):
+    #     product = obj.product
+    #     serializer = ProductSerializer(product, context=self.context)
+    #     return serializer.data
+    
     def get_product_details(self, obj):
-        product = obj.product
-        serializer = ProductSerializer(product)
+        product_id = obj.product
+        product = Product.objects.get(id=product_id)
+        serializer = ProductSerializer(product, context=self.context)
         return serializer.data
     
 class CartSerializer(serializers.ModelSerializer):
@@ -127,50 +146,56 @@ class SimpleProductSerializer(serializers.ModelSerializer):
     # def calculate_final_price(self,product:Product):
     #     final= product.price * int(product.offer_in_percentage)/ Decimal(100)
     #     return product.price - final
+        def create(self, validated_data):
+            account_serializer = ProductSerializer(data=validated_data)
+            if account_serializer.is_valid():
+                product = account_serializer.save()
+
+            return product
     
 
 
-class OrderItemSerializer(serializers.ModelSerializer):
-    # product = SimpleProductSerializer()
-    # total_price = serializers.SerializerMethodField()
-    # item = serializers.SerializerMethodField()
-    # order = OrderSerializer(many=True,source='items')
-    order = serializers.CharField(source ='order.id',read_only=True)
-    cart_view = CartSerializer(source='cart',read_only=True,context={'request': serializers.SerializerMethodField()})
-    # product_details = SimpleProductSerializer(source='product',read_only=True,context={'request': serializers.SerializerMethodField()})
-    product_view = SimpleProductSerializer(read_only=True, source="product")
-
-    # def get_product_details(self, obj):
-    #     order_item = Product.objects.get(id=obj.id)
-    #     return order_item
-
-    # def get_total_price(self,cart_item:CartItem):
-    #     return cart_item.quantity * cart_item.product.offer_price
-    def get_cart_view(self, obj):
-        cart = obj.cart
-        serializer = CartSerializer(cart)
-        return serializer.data
-    
-    class Meta:
-        model =OrderItem
-        fields = ['id','order','price','quantity','cart','cart_view','product','product_view']
 
 # ,'product_details'
+# 'cart','cart_view',
 
-# class OrderSerializer(serializers.ModelSerializer):
-#     items_order = OrderItemSerializer(many=True, read_only=True) 
-#     account_view = serializers.CharField(source="account.username", read_only=True)
-#     total = serializers.SerializerMethodField()
-#     product_details = SimpleProductSerializer(source='product', read_only=True)
-
-    
-#     def get_total(self, obj):
-#         return obj.total_price_of_order()
+# class GettingOrderItemSerializer(serializers.ModelSerializer):
+#     order = serializers.CharField(source ='order.id',read_only=True)
+#     product_view = SimpleProductSerializer(read_only=True, source="product")
 #     class Meta:
-#         model = Order
-#         fields = ['id','account','account_view','placed_at','items_order','payment_status','total','product_details']
+#         model=OrderItem
+#         fields=['id','order','price','product','product_view','quantity']
+
+# class GettingOrderItemSerializer(serializers.ModelSerializer):
+#     order = serializers.CharField(source='order.id', read_only=True)
+#     product_view = serializers.SerializerMethodField()
+
+#     class Meta:
+#         model = OrderItem
+#         fields = ['id', 'order', 'price', 'product', 'product_view', 'quantity']
+
+#     def get_product_view(self, obj):
+#         product_id = obj.product
+#         product = Product.objects.get(id=product_id)
+#         serializer = ProductSerializer(product)
+#         return serializer.data
+
+class GettingOrderItemSerializer(serializers.ModelSerializer):
+    order = serializers.CharField(source='order.id', read_only=True)
+    product_view = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OrderItem
+        fields = ['id', 'order', 'price', 'product', 'product_view', 'quantity']
+
+    def get_product_view(self, obj):
+        product_id = obj.product
+        product = Product.objects.get(id=product_id)
+        serializer = ProductSerializer(product, context=self.context)
+        return serializer.data
+    
 class OrderSerializer(serializers.ModelSerializer):
-    items_order = OrderItemSerializer(many=True, read_only=True) 
+    items_order = GettingOrderItemSerializer(many=True, read_only=True) 
     account_view = serializers.CharField(source="account.username", read_only=True)
     total = serializers.SerializerMethodField()
     
@@ -183,6 +208,30 @@ class OrderSerializer(serializers.ModelSerializer):
         fields = ['id','account','account_view','placed_at','items_order','payment_status','total']
 
 
+class OrderItemSerializer(serializers.ModelSerializer):
+    # product = SimpleProductSerializer()
+    # total_price = serializers.SerializerMethodField()
+    # item = serializers.SerializerMethodField()
+    # order = OrderSerializer(many=True,source='items')
+    order = serializers.CharField(source ='order.id',read_only=True)
+    # cart_view = CartSerializer(source='cart',read_only=True,context={'request': serializers.SerializerMethodField()})
+    # product_details = SimpleProductSerializer(source='product',read_only=True,context={'request': serializers.SerializerMethodField()})
+    product_view = OrderSerializer(read_only=True, source="order")
+
+    # def get_product_details(self, obj):
+    #     order_item = Product.objects.get(id=obj.id)
+    #     return order_item
+
+    # def get_total_price(self,cart_item:CartItem):
+    #     return cart_item.quantity * cart_item.product.offer_price
+    # def get_cart_view(self, obj):
+    #     cart = obj.cart
+    #     serializer = CartSerializer(cart)
+    #     return serializer.data
+    
+    class Meta:
+        model =OrderItem
+        fields = ['id','order','price','product','product_view']
 
 
 
