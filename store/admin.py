@@ -35,8 +35,12 @@ class OrderAdmin(admin.ModelAdmin):
 
 @admin.register(models.OrderItem)
 class OrderItem(admin.ModelAdmin):
-    list_display = ['id','cart','quantity','price','order','product']
+    list_display = ['id','cart','quantity','price','order','product','payment_status']
+    list_select_related = ['order']
 
+
+    def payment_status(self, orderitem):
+        return orderitem.order.payment_status
 
 
 @admin.register(models.Product)

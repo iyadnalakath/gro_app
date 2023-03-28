@@ -5,13 +5,13 @@ from django.db import transaction
 from .signals import order_created
 from main.functions import get_auto_id, password_generater
 import pdb
-
+from rest_framework.response import Response
 
 
 class ProductSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source ='category.name',read_only=True)
     # image_url = serializers.SerializerMethodField()
-    image = serializers.SerializerMethodField()
+    # image = serializers.SerializerMethodField()
 
     class Meta:
         model= Product
@@ -28,12 +28,12 @@ class ProductSerializer(serializers.ModelSerializer):
     #     image_url = obj.image.url
     #     return request.build_absolute_uri(image_url)
 
-    def get_image(self, obj):
-        request = self.context.get('request')
-        image_url = obj.image.url
-        if request is not None:
-            return request.build_absolute_uri(image_url)
-        return image_url
+    # def get_image(self, obj):
+    #     request = self.context.get('request')
+    #     image_url = obj.image.url
+    #     if request is not None:
+    #         return request.build_absolute_uri(image_url)
+    #     return image_url
 
     # def get_image_url(self, product):
     #     request = self.context.get('request')
@@ -234,6 +234,15 @@ class OrderItemSerializer(serializers.ModelSerializer):
         fields = ['id','order','price','product','product_view']
 
 
+    # def update(self, instance, validated_data):
+    #     if self.context['request'].user.is_staff:
+    #         order = instance.order
+    #         order.payment_status = validated_data.get('payment_status', order.payment_status)
+    #         order.save()
+    #         return instance
+    #     else:
+    #         raise serializers.ValidationError("Only admins can update payment status.")
+
 
 class CreateOrderSerializer(serializers.ModelSerializer):
     class Meta:
@@ -241,11 +250,15 @@ class CreateOrderSerializer(serializers.ModelSerializer):
         fields = ['id','placed_at','account','payment_status']
 
 
-class UpdateOrderSerializer(serializers.ModelSerializer):
+class UpdateOrderItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
-        fields=['payment_status']
+        fields = ['payment_status']
 
+    # def validate_payment_status(self, value):
+    #     if self.context['request'].user.role != 'admin':
+    #         raise serializers.ValidationError('Only admin users can update the payment status.')
+    #     return value
 
 
 

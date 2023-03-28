@@ -39,7 +39,7 @@ router.register('category', views.CategoryViewSet)
 router.register('review', views.ReviewViewSet)
 router.register('banner', views.BannerViewSet)
 # router.register('carts', views.CartViewSet, basename="carts")
-# router.register('order', views.OrderViewSet, basename='order')
+# router.register('order', views.OrderView, basename='order')
 # router.register('orderitems', views.OrderViewSet, basename='order_itemss')
 
 products_router = routers.NestedDefaultRouter(router, 'products', lookup='product')
@@ -60,7 +60,8 @@ urlpatterns = [
     path('cart/items/', CartItemView.as_view(), name='cart-items'),
     path('cart/items/<int:pk>/', CartItemView.as_view(), name='cart-item'),
     path('order/', OrderView.as_view(), name='order'),
-    path('order/<int:pk>/', OrderView.as_view(), name='orders'),
+    path('orders/<int:pk>/', OrderView.as_view(), name='user-order'),
+    # path('store/order/items/<int:pk>/update_payment_status/', UpdatePaymentStatusView.as_view(), name='update_payment_status'),
     path('order/items/', OrderItemView.as_view(), name='order-items'),
     path('order/items/<int:pk>/', OrderItemView.as_view(), name='order-item'),
 ]

@@ -20,6 +20,12 @@ from rest_framework import viewsets
 from django.db.models import F
 from rest_framework.request import Request
 from django.http import Http404
+from rest_framework.generics import RetrieveAPIView,RetrieveUpdateDestroyAPIView
+from rest_framework.response import Response
+import json
+from rest_framework.permissions import IsAdminUser, IsAuthenticated, AllowAny
+from rest_framework.authentication import TokenAuthentication,SessionAuthentication,BasicAuthentication
+from .authentication import CustomTokenAuthentication
 # Create your views here.
 
 
@@ -30,8 +36,10 @@ class ProductViewSet(ModelViewSet):
     serializer_class = ProductSerializer
     # filter_backends = [SearchFilter,OrderingFilter]
     filter_backends = [SearchFilter]
-    pagination_class = DefaultPagination
+    # pagination_class = DefaultPagination
     permission_classes =[IsAdminOrReadOnly]
+    # permission_classes =[AllowAny]
+    # authentication_classes = [CustomTokenAuthentication]
     search_fields = ['name','category__name']
     # ordering_fields = ['offer_price']
 
@@ -39,6 +47,10 @@ class ProductViewSet(ModelViewSet):
         return {'request':self.request}
     
 
+    def get_authenticators(self):
+        if self.request.method == 'GET':
+            return []
+        return [CustomTokenAuthentication()]
 
     def destroy(self, request, *args, **kwargs):
         if OrderItem.objects.filter(product_id=kwargs['pk']).count()>0:
@@ -370,11 +382,49 @@ class CartItemView(generics.ListCreateAPIView, generics.RetrieveAPIView, generic
 #         except Account.DoesNotExist:
 #             account_id = None
 #         return Order.objects.filter(account_id=account_id)
+# class OrderDetailView(ModelViewSet):
+#     serializer_class = OrderSerializer
+#     permission_classes = [permissions.IsAuthenticated]
+#     lookup_field = 'pk'
 
+#     def get_queryset(self):
+#         return Order.objects.all()
 
-class OrderView(generics.ListAPIView):
+#     def get_object(self):
+#         queryset = self.get_queryset()
+#         obj = queryset.filter(pk=self.kwargs[self.lookup_field]).first()
+#         if obj:
+#             if self.request.user.role == "customer":
+#                 if obj.account != self.request.user:
+#                     raise PermissionDenied("You are not allowed to access this order")
+        # return obj
+
+# class UpdatePaymentStatusView(generics.UpdateAPIView):
+#     queryset = Order.objects.all()
+#     serializer_class = UpdateOrderItemSerializer
+#     permission_classes = [permissions.IsAuthenticated]
+#     lookup_field = 'pk'
+
+#     def update(self, request, *args, **kwargs):
+#         order_id = kwargs['pk']
+#         payment_status = request.data.get('payment_status')
+
+#         try:
+#             order = self.get_queryset().get(id=order_id)
+#         except Order.DoesNotExist:
+#             return Response({'error': 'Order not found'}, status=status.HTTP_404_NOT_FOUND)
+
+#         order.payment_status = payment_status
+#         order.save()
+
+#         serializer = self.get_serializer(order)
+#         return Response(serializer.data)
+# class OrderView(ModelViewSet):
+class OrderView(generics.ListAPIView,RetrieveUpdateDestroyAPIView):
+    # queryset = Order.objects.all()
     serializer_class = OrderSerializer
     permission_classes = [permissions.IsAuthenticated]
+    # lookup_field = 'pk'
 
     def get_queryset(self):
         queryset = Order.objects.all()
@@ -383,8 +433,42 @@ class OrderView(generics.ListAPIView):
             queryset = queryset.filter(account=self.request.user)
         return queryset
 
+    # def retrieve(self, request, *args, **kwargs):
+    #     instance = self.get_object()
+    #     serializer = self.get_serializer(instance)
+    #     return Response(serializer.data)
 
+    # def get(self, request, *args, **kwargs):
+    #     order_id = kwargs['pk']
+    #     try:
+    #         order = self.get_queryset().get(id=order_id)
+    #     except Order.DoesNotExist:
+    #         return Response({'error': 'Order not found'}, status=status.HTTP_404_NOT_FOUND)
 
+    #     serializer = self.get_serializer(order)
+    #     return Response(serializer.data)
+    
+
+    
+    # def update_payment_status(self, request, *args, **kwargs):
+    #     order_id = kwargs['pk']
+    #     payment_status = request.data.get('payment_status')
+
+    #     try:
+    #         order = self.get_queryset().get(id=order_id)
+    #     except Order.DoesNotExist:
+    #         return Response({'error': 'Order not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    #     order.payment_status = payment_status
+    #     order.save()
+
+    #     serializer = self.get_serializer(order)
+    #     return Response(serializer.data)
+    # def get_object(self):
+    #     queryset = Order.objects.filter(account=self.request.user)
+    #     obj = get_object_or_404(queryset)
+    #     return obj
+ 
     
 class OrderItemView(generics.ListCreateAPIView, generics.RetrieveAPIView, generics.DestroyAPIView, generics.UpdateAPIView):
     queryset = OrderItem.objects.all()
@@ -406,8 +490,10 @@ class OrderItemView(generics.ListCreateAPIView, generics.RetrieveAPIView, generi
     #     cart_view = CartView()
     #     return cart_view.get_object(request=self.request)
     def get_queryset(self):
-        return OrderItem.objects.filter(order__account=self.request.user)
- 
+        if self.request.user.role == "customer":
+            return OrderItem.objects.filter(order__account=self.request.user)
+        return OrderItem.objects.all()
+    
     def get(self, request, *args, **kwargs):
         try:
             items_order = self.get_object()
@@ -428,38 +514,26 @@ class OrderItemView(generics.ListCreateAPIView, generics.RetrieveAPIView, generi
 
         self.perform_destroy(items_order)
         return Response(status=status.HTTP_204_NO_CONTENT)
+    
 
 
-    # def create(self, request, *args, **kwargs):
-    #     cart_id = request.query_params.get('cart')
-    #     cart = get_object_or_404(Cart, pk=cart_id)
-    #     if cart.user != request.user:
-    #         raise PermissionDenied("You are not allowed to create an order item from this cart.")
-    #     order = Order.objects.create(account=request.user)
-    #     order_items = []
-    #     for cart_item in cart.cart_items.all():
-    #         order_item = OrderItem.objects.create(
-    #             order=order,
-    #             product=cart_item.product,
-    #             quantity=cart_item.quantity,
-    #             price=cart_item.product.price,
-    #         )
-    #         order_items.append(order_item)
-    #     serializer = OrderItemSerializer(order_items, many=True)
-    #     return Response(serializer.data, status=status.HTTP_201_CREATED)
-    # def create(self, request, *args, **kwargs):
+
     def create(self, request, *args, **kwargs):
         cart_id = self.request.query_params.get('cart')
         try:
             cart = Cart.objects.get(pk=cart_id)
         except Cart.DoesNotExist:
             return Response({"cart": "Invalid cart ID."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if cart.items.count() == 0:
+            return Response({"cart": "Cart is empty."}, status=status.HTTP_400_BAD_REQUEST)
+
     
     # rest of the code to create Order and OrderItem instances
 
         order_data = {
             'account': request.user,
-            'payment_status': 'pending',
+            # 'payment_status': 'pending',
             # 'total': cart.total_price_of_products_in_cart,
   
         }
@@ -490,8 +564,12 @@ class OrderItemView(generics.ListCreateAPIView, generics.RetrieveAPIView, generi
 
         # Return the serialized Order instance
         serializer = self.get_serializer(order)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-
+        # return Response(serializer.data, status=status.HTTP_201_CREATED)
+        response_data = {
+            'message': 'Order created successfully.',
+            # 'data': serializer.data
+        }
+        return Response(response_data, status=status.HTTP_201_CREATED)
 
     # def get(self, request, *args, **kwargs):
     #     self.request = request
@@ -501,16 +579,96 @@ class OrderItemView(generics.ListCreateAPIView, generics.RetrieveAPIView, generi
         self.request = request
         return super().post(request, *args, **kwargs)
     
+
+    # def update(self, request, *args, **kwargs):
+    #     try:
+    #         order_item = self.get_object()
+    #     except Http404:
+    #         return Response({'error': 'Order item not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    #     # if order_item.order.account != request.user:
+    #     if not request.user.is_staff:
+    #         return Response({'error': 'You do not have permission to perform this action.'}, status=status.HTTP_403_FORBIDDEN)
+
+    #     order = order_item.order
+    #     if order.payment_status == 'paid':
+    #         return Response({'error': 'Payment has already been made for this order'}, status=status.HTTP_400_BAD_REQUEST)
+
+    #     # Update the payment_status field of the Order instance
+    #     order.payment_status = request.data.get('payment_status', order.payment_status)
+    #     order.save()
+
+    #     serializer = self.get_serializer(order_item, data=request.data, partial=True)
+    #     if serializer.is_valid():
+    #         serializer.save()
+    #         return Response(serializer.data)
+    #     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def update(self, request, *args, **kwargs):
+        try:
+            order_item = self.get_object()
+        except Http404:
+            return Response({'error': 'Order item not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not request.user.is_staff:
+            return Response({'error': 'You do not have permission to perform this action.'}, status=status.HTTP_403_FORBIDDEN)
+
+        order = order_item.order
+        if order.payment_status == Order.PAYMENT_STATUS_COMPLETE:
+            return Response({'error': 'Payment has already been made for this order'}, status=status.HTTP_400_BAD_REQUEST)
+
+        payment_status = request.data.get('payment_status')
+        if payment_status is not None and payment_status not in dict(Order.PAYMENT_STATUS_CHOICES).keys():
+            return Response({'error': 'Invalid payment status'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Update the payment_status field of the Order instance
+        order.payment_status = payment_status or order.payment_status
+        order.save()
+
+        serializer = self.get_serializer(order_item, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    
+    # def update(self, request, *args, **kwargs):
+    #     order = self.get_object()
+    #     data = request.data.copy()
+    #     data["account"] = self.request.user.id
+
+    #     serializer =OrderSerializer(order, data)
+    #     if serializer.is_valid():
+    #         if request.user.role == "admin":
+    #             # if order.account.id == self.request.user.id:
+    #             serializer.save()
+    #             return Response(serializer.data)
+    #             # else:
+    #             #     raise PermissionDenied("You are not allowed to update this object.")
+    #         else:
+    #             raise PermissionDenied("only autherised team allowed to update it")
+    #     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+    # def update(self, request, *args, **kwargs):
+    #     instance = self.get_object()
+    #     instance.payment_status = request.data.get('payment_status', instance.payment_status)
+    #     instance.save()
+    #     serializer = self.get_serializer(instance)
+    #     return Response(serializer.data)
+    
     # def update(self, request, *args, **kwargs):
     #     try:
     #         item = self.get_object()
     #     except Http404:
     #         return Response({'error': 'Item not found'}, status=status.HTTP_404_NOT_FOUND)
 
-    #     if item.cart.account != request.user:
+    #     # if item.cart.account != request.user:
+    #     if self.request.user != "admin":
     #         return Response({'error': 'Unauthorized'}, status=status.HTTP_401_UNAUTHORIZED)
 
-    #     serializer = self.get_serializer(item, data=request.data, partial=True)
+    #     # serializer = self.get_serializer(item, data=request.data, partial=True)
+    #     serializer= UpdateOrderSerializer(item, data=request.data, partial=True)
     #     if serializer.is_valid():
     #         serializer.save()
     #         return Response(serializer.data)
@@ -518,7 +676,24 @@ class OrderItemView(generics.ListCreateAPIView, generics.RetrieveAPIView, generi
     #         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-
+    # def create(self, request, *args, **kwargs):
+    #     cart_id = request.query_params.get('cart')
+    #     cart = get_object_or_404(Cart, pk=cart_id)
+    #     if cart.user != request.user:
+    #         raise PermissionDenied("You are not allowed to create an order item from this cart.")
+    #     order = Order.objects.create(account=request.user)
+    #     order_items = []
+    #     for cart_item in cart.cart_items.all():
+    #         order_item = OrderItem.objects.create(
+    #             order=order,
+    #             product=cart_item.product,
+    #             quantity=cart_item.quantity,
+    #             price=cart_item.product.price,
+    #         )
+    #         order_items.append(order_item)
+    #     serializer = OrderItemSerializer(order_items, many=True)
+    #     return Response(serializer.data, status=status.HTTP_201_CREATED)
+    # def create(self, request, *args, **kwargs):
 
 
 

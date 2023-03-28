@@ -137,6 +137,7 @@ class Order(models.Model):
         for order_item in self.items_order.all():
             total_price += order_item.price * order_item.quantity
         return total_price
+    
 
 
 class OrderItem(models.Model):
