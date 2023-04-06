@@ -16,6 +16,9 @@ from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.viewsets import ModelViewSet
 from rest_framework import generics
 from django.contrib.auth.views import LoginView
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import parser_classes
+from rest_framework.parsers import JSONParser,FormParser, MultiPartParser,FileUploadParser
 
 
 
@@ -168,6 +171,25 @@ class LoginView(APIView):
             context["response"] = "Error"
             context["error_message"] = "The username or password is incorrect"
             return Response(context, status=status.HTTP_401_UNAUTHORIZED)
+        
+@api_view(['POST',])
+@permission_classes((AllowAny, ))
+@parser_classes([JSONParser,FormParser, MultiPartParser,FileUploadParser])
+def logout_view(request):
+    context = {}
+    try:
+        request.user.auth_token.delete()
+        # logout(request)
+        context['response'] = 'LogOut Successful.'
+        status_code=status.HTTP_200_OK
+    except:
+        context['response'] = 'Error'
+        context['error_message'] = 'Invalid Token'
+        status_code=status.HTTP_400_BAD_REQUEST
+    
+    return Response(context,status=status_code)
+
+
 
 
 # class LoginView(generics.CreateAPIView):

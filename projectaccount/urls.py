@@ -2,7 +2,8 @@ from django.urls import path
 from rest_framework_nested import routers
 from .views import (
     LoginView,
-    RegisterCustomerView
+    RegisterCustomerView,
+    logout_view
 )
 from . import views
 
@@ -10,6 +11,7 @@ from . import views
 urlpatterns = [
     path("login/", LoginView.as_view(), name="login"),
     path("registration/", RegisterCustomerView.as_view(), name="register"),
+    path('logout/', logout_view, name="logout"), 
     # path("event_team_register/", RegisterEventTeamView.as_view(), name="register"),
     # path("userslist/", ListUsersView.as_view(), name="list_users"),
     # path(
