@@ -114,6 +114,13 @@ class CategoryViewSet(ModelViewSet):
     queryset = Category.objects.annotate(product_count=Count('product')).all()
     serializer_class = CategorySerializer
     permission_classes =[IsAdminOrReadOnly]
+
+
+    def get_authenticators(self):
+        if self.request.method == 'GET':
+            return []
+        return [CustomTokenAuthentication()]
+    
     def delete(self,request,pk):
         collection = get_object_or_404(Category,pk=pk)
         if collection.products.count()>0:
@@ -130,7 +137,10 @@ class BannerViewSet(ModelViewSet):
     queryset =Banner.objects.all()
     serializer_class =BannerSerializer
 
-
+    def get_authenticators(self):
+        if self.request.method == 'GET':
+            return []
+        return [CustomTokenAuthentication()]
 # cartprogram
 
 # class CartViewSet(CreateModelMixin,GenericViewSet,RetrieveModelMixin,DestroyModelMixin,UpdateModelMixin,ListModelMixin):
